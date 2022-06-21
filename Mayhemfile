@@ -1,6 +1,5 @@
 project: tflite-micro
-target: tflite-micro
-image: ghcr.io/rnshah9/playground:tflite-micro
+target: tflite-flatbuffer-align
 testsuite:
   - file://test
 
