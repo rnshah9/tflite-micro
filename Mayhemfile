@@ -4,6 +4,6 @@ testsuite:
   - file://test
 
 cmds:
-  - cmd: /repo/bazel-bin/tensorflow/lite/micro/tools/tflite_flatbuffer_align @@ /dev/null
+  - cmd: /tflite_flatbuffer_align @@ /dev/null
     env:
       DISABLE_SMOKETEST: '1'
