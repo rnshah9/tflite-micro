@@ -35,16 +35,17 @@ from tflite_micro.tensorflow.lite.micro.python.interpreter.src import tflm_runti
 
 class ConvModelTests(test_util.TensorFlowTestCase):
   filename = "/tmp/interpreter_test_conv_model.tflite"
-  model_data = generate_test_models.generate_conv_model(True, filename)
   input_shape = (1, 16, 16, 1)
   output_shape = (1, 10)
 
   def testCompareWithTFLite(self):
+    model_data = generate_test_models.generate_conv_model(False)
+
     # TFLM interpreter
-    tflm_interpreter = tflm_runtime.Interpreter.from_bytes(self.model_data)
+    tflm_interpreter = tflm_runtime.Interpreter.from_bytes(model_data)
 
     # TFLite interpreter
-    tflite_interpreter = tf.lite.Interpreter(model_content=self.model_data)
+    tflite_interpreter = tf.lite.Interpreter(model_content=model_data)
     tflite_interpreter.allocate_tensors()
     tflite_output_details = tflite_interpreter.get_output_details()[0]
     tflite_input_details = tflite_interpreter.get_input_details()[0]
@@ -55,10 +56,10 @@ class ConvModelTests(test_util.TensorFlowTestCase):
       data_x = np.random.randint(-127, 127, self.input_shape, dtype=np.int8)
 
       # Run inference on TFLite
-      tflite_interpreter.set_tensor(tflite_input_details['index'], data_x)
+      tflite_interpreter.set_tensor(tflite_input_details["index"], data_x)
       tflite_interpreter.invoke()
       tflite_output = tflite_interpreter.get_tensor(
-          tflite_output_details['index'])
+          tflite_output_details["index"])
 
       # Run inference on TFLM
       tflm_interpreter.set_input(data_x, 0)
@@ -73,8 +74,10 @@ class ConvModelTests(test_util.TensorFlowTestCase):
       self.assertAllLessEqual((tflite_output - tflm_output), 1)
 
   def testModelFromFileAndBufferEqual(self):
+    model_data = generate_test_models.generate_conv_model(True, self.filename)
+
     file_interpreter = tflm_runtime.Interpreter.from_file(self.filename)
-    bytes_interpreter = tflm_runtime.Interpreter.from_bytes(self.model_data)
+    bytes_interpreter = tflm_runtime.Interpreter.from_bytes(model_data)
 
     num_steps = 100
     for i in range(0, num_steps):
@@ -96,8 +99,10 @@ class ConvModelTests(test_util.TensorFlowTestCase):
       self.assertAllEqual(file_output, bytes_output)
 
   def testMultipleInterpreters(self):
+    model_data = generate_test_models.generate_conv_model(False)
+
     interpreters = [
-        tflm_runtime.Interpreter.from_bytes(self.model_data) for i in range(10)
+        tflm_runtime.Interpreter.from_bytes(model_data) for i in range(10)
     ]
 
     num_steps = 100
@@ -127,6 +132,8 @@ class ConvModelTests(test_util.TensorFlowTestCase):
     return (int_ref, output_ref)
 
   def testOutputTensorMemoryLeak(self):
+    generate_test_models.generate_conv_model(True, self.filename)
+
     int_ref, output_ref = self._helperOutputTensorMemoryLeak()
     # Output obtained in the helper function should be out of scope now, perform
     # garbage collection and check that the weakref is dead. If it's still
@@ -140,6 +147,30 @@ class ConvModelTests(test_util.TensorFlowTestCase):
     self.assertFalse(int_ref.alive)
     self.assertFalse(output_ref.alive)
 
+  # TODO (b/240162715): Add a test case to register a custom OP
 
-if __name__ == '__main__':
+  def testMalformedCustomOps(self):
+    model_data = generate_test_models.generate_conv_model(False)
+    custom_op_registerers = [("wrong", "format")]
+    with self.assertRaisesWithPredicateMatch(ValueError,
+                                             "must be a list of strings"):
+      interpreter = tflm_runtime.Interpreter.from_bytes(
+          model_data, custom_op_registerers)
+
+    custom_op_registerers = "WrongFormat"
+    with self.assertRaisesWithPredicateMatch(ValueError,
+                                             "must be a list of strings"):
+      interpreter = tflm_runtime.Interpreter.from_bytes(
+          model_data, custom_op_registerers)
+
+  def testNonExistentCustomOps(self):
+    model_data = generate_test_models.generate_conv_model(False)
+    custom_op_registerers = ["SomeRandomOp"]
+    with self.assertRaisesWithPredicateMatch(
+        SystemError, "returned a result with an error set"):
+      interpreter = tflm_runtime.Interpreter.from_bytes(
+          model_data, custom_op_registerers)
+
+
+if __name__ == "__main__":
   test.main()
